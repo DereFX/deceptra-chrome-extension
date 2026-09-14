@@ -1,9 +1,13 @@
 (function startDeceptra() {
   "use strict";
 
+  if (globalThis.__deceptraContentLoaded) return;
+  globalThis.__deceptraContentLoaded = true;
+
   const DEFAULTS = { enabled: true, showPageBadge: true, aiEnabled: false, minimumSeverity: "low" };
   const state = { findings: [], snapshot: null, settings: DEFAULTS, panelOpen: false, scanTimer: null, aiPending: false };
   const severityRank = { low: 1, medium: 2, high: 3 };
+  const FLOW_SELECTOR = "form, [role='dialog'], [aria-modal='true'], [class*='cookie' i], [id*='cookie' i], [class*='consent' i], [id*='consent' i], [class*='checkout' i], [id*='checkout' i], [class*='cart' i], [id*='cart' i], [class*='payment' i], [id*='payment' i], [class*='subscription' i], [id*='subscription' i], [class*='modal' i]";
 
   function visible(element) {
     if (!element || !(element instanceof Element)) return false;
@@ -38,6 +42,15 @@
     return `${explicit} ${input.getAttribute("aria-label") || ""} ${safeText(parent, 350)}`.replace(/\s+/g, " ").trim().slice(0, 500);
   }
 
+  function flowContainer(element) {
+    try { return element.closest(FLOW_SELECTOR); } catch (_) { return null; }
+  }
+
+  function flowMetadata(element) {
+    const container = flowContainer(element);
+    return { inFlow: Boolean(container), context: container ? safeText(container, 500) : "" };
+  }
+
   function rgbLuminance(color) {
     const values = String(color).match(/[\d.]+/g);
     if (!values || values.length < 3) return 0.5;
@@ -61,7 +74,8 @@
         defaultChecked: input.defaultChecked || input.hasAttribute("checked"),
         required: input.required,
         context: labelText(input),
-        selector: selectorFor(input)
+        selector: selectorFor(input),
+        ...flowMetadata(input)
       }));
 
     const buttonElements = [...document.querySelectorAll("button, [role='button'], input[type='submit'], input[type='button'], a[href]")]
@@ -71,18 +85,20 @@
     const buttons = buttonElements.map((element) => {
       const rect = element.getBoundingClientRect();
       const container = element.closest("form, [role='dialog'], aside, section, main, div");
+      const flow = flowMetadata(element);
       return {
         text: safeText(element, 140) || String(element.value || ""),
         selector: selectorFor(element),
         group: selectorFor(container),
         area: rect.width * rect.height,
-        prominence: prominence(element)
+        prominence: prominence(element),
+        ...flow
       };
     });
 
     const textElements = [...document.querySelectorAll("label, p, li, small, button, a, [role='dialog'], [class*='price'], [class*='total'], [class*='fee'], [class*='trial'], [class*='consent']")]
       .filter(visible)
-      .map((element) => ({ text: safeText(element, 650), selector: selectorFor(element) }))
+      .map((element) => ({ text: safeText(element, 650), selector: selectorFor(element), ...flowMetadata(element) }))
       .filter((item) => item.text.length >= 4 && item.text.length <= 650);
     const unique = [];
     const seen = new Set();
@@ -92,12 +108,14 @@
       if (unique.length >= 240) break;
     }
 
+    const flowDetected = checkboxes.some((item) => item.inFlow) || buttons.some((item) => item.inFlow) || unique.some((item) => item.inFlow);
     return {
       url: location.origin + location.pathname,
       title: document.title.slice(0, 200),
       checkboxes,
       buttons,
       textBlocks: unique,
+      flowDetected,
       capturedAt: new Date().toISOString()
     };
   }
@@ -178,7 +196,8 @@
     chip.dataset.count = state.findings.length ? String(state.findings.length) : "";
     panel.classList.toggle("hidden", !state.panelOpen);
     ui.querySelector(".status").textContent = state.aiPending ? "Checking ambiguous context with AI…" : `${state.findings.length} potential pattern${state.findings.length === 1 ? "" : "s"}`;
-    ui.querySelector(".list").innerHTML = state.findings.length ? state.findings.map((item) => `<article class="item ${escapeHtml(item.severity)}" data-selector="${escapeHtml(item.elementSelector || "")}"><div class="row"><strong>${escapeHtml(item.title)}</strong><span class="tag">${escapeHtml(item.severity)}</span></div><div class="confidence">Confidence ${Math.round((item.confidence || 0) * 100)}% · ${item.source === "ai" ? "AI review" : "local evidence"}</div><div class="evidence">“${escapeHtml(item.evidence)}”</div><div class="why">${escapeHtml(item.explanation)}</div></article>`).join("") : `<div class="empty">No obvious manipulation found.<br><small>This is not a guarantee that the flow is fair.</small></div>`;
+    const emptyTitle = state.snapshot?.flowDetected ? "No obvious manipulation found." : "No checkout or consent flow detected.";
+    ui.querySelector(".list").innerHTML = state.findings.length ? state.findings.map((item) => `<article class="item ${escapeHtml(item.severity)}" data-selector="${escapeHtml(item.elementSelector || "")}"><div class="row"><strong>${escapeHtml(item.title)}</strong><span class="tag">${escapeHtml(item.severity)}</span></div><div class="confidence">Confidence ${Math.round((item.confidence || 0) * 100)}% · ${item.source === "ai" ? "AI review" : "local evidence"}</div><div class="evidence">“${escapeHtml(item.evidence)}”</div><div class="why">${escapeHtml(item.explanation)}</div></article>`).join("") : `<div class="empty">${emptyTitle}<br><small>This is not a guarantee that the flow is fair.</small></div>`;
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
