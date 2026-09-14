@@ -1,0 +1,10 @@
+.deceptra-highlight {
+  outline: 4px solid #ef4444 !important;
+  outline-offset: 3px !important;
+  animation: deceptra-pulse 1.2s ease-in-out 2;
+}
+
+@keyframes deceptra-pulse {
+  0%, 100% { outline-color: #ef4444; }
+  50% { outline-color: #fbbf24; }
+}
