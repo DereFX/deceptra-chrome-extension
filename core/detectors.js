@@ -15,6 +15,7 @@
   };
 
   const RX = {
+    flowContext: /\b(cookie|consent|privacy|checkout|cart|basket|order|payment|purchase|billing|subscription|trial|renew|offer|discount|price|total|fee|delivery|shipping|marketing|newsletter|opt[ -]?(?:in|out))\b/i,
     marketing: /\b(marketing|newsletter|partner offers?|promotions?|special offers?|product updates?|shipping protection|insurance|donation|recurring delivery|subscribe)\b/i,
     required: /\b(terms of (?:service|use)|privacy policy|age requirement|required to (?:buy|purchase|place)|billing address)\b/i,
     confirmshaming: /\b(no thanks?[,— -]*(?:i |we )?(?:hate|prefer|don'?t want|do not want|would rather|miss)|continue without supporting|skip (?:this|savings)|i'?ll pay full price|no[,— -]*i don'?t care)\b/i,
@@ -23,7 +24,8 @@
     lateFee: /\b(?:added|calculated|shown|applied).{0,45}(?:checkout|final step|next step|payment)|(?:checkout|final step|next step).{0,45}(?:fee|charge)\b/i,
     trick: /\b(?:don'?t|do not|not).{0,35}(?:unsubscribe|opt out|decline|refuse|stop receiving)|uncheck.{0,35}(?:not|don'?t)|check.{0,35}(?:not receive|opt out)\b/i,
     forced: /\b(?:must|required to|need to).{0,45}(?:create an account|sign up|share|subscribe|enable notifications?|provide (?:a )?phone)\b/i,
-    urgency: /\b(limited time|ends (?:soon|today)|hurry|act now|today only|last chance|offer expires|\d{1,2}:\d{2}(?::\d{2})?)\b/i,
+    urgency: /\b(limited time|ends (?:soon|today|in)|hurry|act now|today only|last chance|offer expires?|deal expires?|complete (?:your )?(?:order|purchase).{0,30}(?:within|before)|price (?:expires?|increases?))\b/i,
+    countdown: /\b\d{1,2}:\d{2}(?::\d{2})?\b/,
     scarcity: /\b(only \d+ left|low stock|selling fast|almost gone|in \d+ carts?|\d+ people (?:are )?viewing)\b/i,
     social: /\b(\d+ (?:people|customers|shoppers).{0,35}(?:view|bought|purchase)|just (?:bought|purchased)|popular choice|most people choose)\b/i,
     accept: /\b(accept|agree|allow all|yes|continue|subscribe|start trial|get offer)\b/i,
@@ -54,13 +56,24 @@
   }
 
   function dedupe(findings) {
-    const seen = new Set();
+    const kept = [];
+    const counts = new Map();
     return findings.filter((item) => {
-      const key = `${item.type}:${item.evidence.toLowerCase()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      const evidence = clean(item.evidence).toLowerCase();
+      const duplicate = kept.some((other) => {
+        if (other.type !== item.type) return false;
+        const prior = clean(other.evidence).toLowerCase();
+        return prior === evidence || (Math.min(prior.length, evidence.length) >= 12 && (prior.includes(evidence) || evidence.includes(prior)));
+      });
+      if (duplicate || (counts.get(item.type) || 0) >= 4) return false;
+      kept.push(item);
+      counts.set(item.type, (counts.get(item.type) || 0) + 1);
       return true;
     });
+  }
+
+  function relevant(block, text) {
+    return Boolean(block?.inFlow || RX.flowContext.test(clean(block?.context)) || RX.flowContext.test(text));
   }
 
   function analyzeCheckboxes(checkboxes) {
@@ -84,14 +97,15 @@
       const text = clean(block.text || block);
       const selector = block.selector || "";
       if (text.length < 4) continue;
-      if (RX.confirmshaming.test(text)) out.push(finding("confirmshaming", text, 0.92, selector, { elementSelector: selector }));
+      const inRelevantFlow = relevant(block, text);
+      if (inRelevantFlow && RX.confirmshaming.test(text)) out.push(finding("confirmshaming", text, 0.92, selector, { elementSelector: selector }));
       if (RX.continuity.test(text)) out.push(finding("forced_continuity", text, 0.94, selector, { elementSelector: selector }));
       if (RX.fee.test(text) && RX.lateFee.test(text)) out.push(finding("hidden_fee", text, 0.9, selector, { elementSelector: selector }));
-      if (RX.trick.test(text)) out.push(finding("trick_question", text, 0.84, selector, { elementSelector: selector }));
-      if (RX.forced.test(text)) out.push(finding("forced_action", text, 0.86, selector, { elementSelector: selector }));
-      if (RX.urgency.test(text)) out.push(finding("urgency", text, 0.78, selector, { elementSelector: selector }));
-      if (RX.scarcity.test(text)) out.push(finding("scarcity", text, 0.8, selector, { elementSelector: selector }));
-      if (RX.social.test(text)) out.push(finding("social_proof", text, 0.72, selector, { elementSelector: selector }));
+      if (inRelevantFlow && RX.trick.test(text)) out.push(finding("trick_question", text, 0.84, selector, { elementSelector: selector }));
+      if (inRelevantFlow && RX.forced.test(text)) out.push(finding("forced_action", text, 0.86, selector, { elementSelector: selector }));
+      if (inRelevantFlow && RX.urgency.test(text)) out.push(finding("urgency", text, 0.78, selector, { elementSelector: selector }));
+      if (inRelevantFlow && RX.scarcity.test(text)) out.push(finding("scarcity", text, 0.8, selector, { elementSelector: selector }));
+      if (inRelevantFlow && RX.social.test(text)) out.push(finding("social_proof", text, 0.72, selector, { elementSelector: selector }));
     }
     return out;
   }
@@ -103,6 +117,8 @@
     for (const yes of accepts) {
       for (const no of rejects) {
         if (!yes.group || yes.group !== no.group) continue;
+        const buttonContext = `${clean(yes.context)} ${clean(no.context)} ${clean(yes.text)} ${clean(no.text)}`;
+        if (!yes.inFlow && !no.inFlow && !RX.flowContext.test(buttonContext)) continue;
         const areaRatio = Math.max(1, Number(yes.area || 1) / Math.max(1, Number(no.area || 1)));
         const prominenceGap = Number(yes.prominence || 0) - Number(no.prominence || 0);
         if (areaRatio >= 1.6 || prominenceGap >= 2.3) {
