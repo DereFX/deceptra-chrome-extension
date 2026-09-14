@@ -24,7 +24,14 @@ function render(items) {
 async function messageActive(message) {
   const tab = await activeTab();
   if (!tab?.id || !/^https?:/.test(tab.url || "")) throw new Error("Open a regular website to scan it.");
-  return chrome.tabs.sendMessage(tab.id, message);
+  try {
+    return await chrome.tabs.sendMessage(tab.id, message);
+  } catch (error) {
+    if (!/receiving end does not exist|could not establish connection/i.test(error.message || "")) throw error;
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["core/detectors.js", "content/content.js"] });
+    await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["content/content.css"] });
+    return chrome.tabs.sendMessage(tab.id, message);
+  }
 }
 
 async function refresh() {
