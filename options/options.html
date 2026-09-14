@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deceptra settings</title><link rel="stylesheet" href="options.css"></head>
+<body><main><h1>Deceptra settings</h1><p class="lede">Local detection works without an account or server. AI review is optional and sends only sanitized labels, button copy, and nearby visible text.</p>
+  <section><h2>Scanning</h2><label class="check"><input id="enabled" type="checkbox"> Enable automatic local scans</label><label class="check"><input id="showPageBadge" type="checkbox"> Show the floating page badge</label><label>Minimum severity<select id="minimumSeverity"><option value="low">Low — show everything</option><option value="medium">Medium</option><option value="high">High only</option></select></label></section>
+  <section><h2>Optional AI endpoint</h2><label class="check"><input id="aiEnabled" type="checkbox"> Ask the configured backend to review ambiguous context</label><label>Vercel endpoint URL<input id="apiEndpoint" type="url" placeholder="https://your-project.vercel.app/api/analyze"></label><p class="note">Never place an OpenAI API key in extension source. Configure it only as an encrypted Vercel environment variable.</p></section>
+  <div class="actions"><button id="save">Save settings</button><span id="status" role="status"></span></div>
+</main><script src="options.js"></script></body></html>
