@@ -1,0 +1,10 @@
+{
+  "name": "deceptra-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "package": "node scripts/package.mjs"
+  }
+}

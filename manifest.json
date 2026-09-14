@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Deceptra — Dark Pattern Detector",
+  "version": "0.1.0",
+  "description": "Detects manipulative consent and checkout patterns and explains them in plain language.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Scan this page with Deceptra",
+    "default_popup": "popup/popup.html"
+  },
+  "options_page": "options/options.html",
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["core/detectors.js", "content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/content.css"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ]
+}
