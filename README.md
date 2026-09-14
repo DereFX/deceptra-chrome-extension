@@ -17,7 +17,7 @@ Deceptra is a privacy-first Manifest V3 extension that detects manipulative cons
 
 ## Install locally
 
-1. Download and unzip `deceptra-extension-v0.1.0.zip`, or use this repository folder directly.
+1. Download and unzip `deceptra-extension-v0.1.1.zip`, or use this repository folder directly.
 2. Open `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Choose **Load unpacked** and select the folder containing `manifest.json` (the generated `dist/` folder after packaging).
@@ -33,7 +33,7 @@ npm test
 npm run package
 ```
 
-The package command creates `deceptra-extension-v0.1.0.zip` with extension runtime files only.
+The package command creates `deceptra-extension-v0.1.1.zip` with extension runtime files only.
 
 ## Optional Vercel AI review
 
